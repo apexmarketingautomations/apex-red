@@ -3,16 +3,13 @@ import { useState, useEffect, useRef } from 'react';
 const API = import.meta.env.VITE_API_URL ?? '';
 
 const EVENT_ICON: Record<string, string> = {
-  finding:       '🔴',
-  host_found:    '🌐',
-  phase_update:  '⚙️',
-  scan_started:  '🚀',
-  scan_completed:'✅',
-  recon_done:    '🔍',
-  vuln_scan_done:'🧪',
-  pentest_done:  '💥',
-  osint_done:    '👤',
-  wifi_done:     '📡',
+  finding:                '🔴',
+  entity_found:           '🔵',
+  investigation_started:  '🚀',
+  investigation_completed:'✅',
+  investigation_failed:   '❌',
+  ai_report_ready:        '🤖',
+  status:                 '⚙️',
 };
 
 interface LiveEvent {
@@ -22,36 +19,49 @@ interface LiveEvent {
   data: any;
 }
 
-export default function LiveFeed({ scanId }: { scanId: string }) {
+export default function LiveFeed({ invId }: { invId: string }) {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const [connected, setConnected] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const es = new EventSource(`${API}/api/scans/${scanId}/live`);
-
+    const es = new EventSource(`${API}/api/investigations/${invId}/live`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
 
-    const handler = (event: MessageEvent, name: string) => {
-      const data = JSON.parse(event.data);
-      setEvents(prev => [
-        ...prev,
-        { id: crypto.randomUUID(), ts: new Date(), event: name, data },
-      ]);
+    const addEvent = (event: MessageEvent, name: string) => {
+      let data: any;
+      try { data = JSON.parse(event.data); } catch { data = event.data; }
+      setEvents(prev => [...prev.slice(-200), { id: crypto.randomUUID(), ts: new Date(), event: name, data }]);
     };
 
-    const eventNames = Object.keys(EVENT_ICON);
-    for (const name of eventNames) {
-      es.addEventListener(name, (e: any) => handler(e, name));
-    }
+    const names = [
+      'finding', 'entity_found', 'investigation_started', 'investigation_completed',
+      'investigation_failed', 'ai_report_ready', 'status',
+    ];
+    for (const n of names) es.addEventListener(n, (e: any) => addEvent(e, n));
 
     return () => es.close();
-  }, [scanId]);
+  }, [invId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [events]);
+
+  const formatEvent = (e: LiveEvent) => {
+    if (e.event === 'finding') {
+      const sev = e.data.severity?.toUpperCase();
+      const cls = sev === 'CRITICAL' ? 'text-red-400' : sev === 'HIGH' ? 'text-orange-400' : 'text-zinc-300';
+      return <span className={cls}>[{sev}] {e.data.title}</span>;
+    }
+    if (e.event === 'entity_found') {
+      return <span className="text-blue-400">{e.data.type}: {e.data.value}</span>;
+    }
+    if (e.event === 'status') {
+      return <span className="text-zinc-400">status → {e.data.status}</span>;
+    }
+    return <span className="text-zinc-400">{JSON.stringify(e.data)}</span>;
+  };
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
@@ -60,26 +70,17 @@ export default function LiveFeed({ scanId }: { scanId: string }) {
         <span className="text-xs text-zinc-400">{connected ? 'Live' : 'Disconnected'}</span>
         <span className="text-xs text-zinc-600 ml-auto">{events.length} events</span>
       </div>
-      <div className="h-96 overflow-y-auto p-4 font-mono text-xs space-y-1.5">
+      <div className="h-80 overflow-y-auto p-4 font-mono text-xs space-y-1.5">
         {events.length === 0 && (
           <div className="text-zinc-600 text-center pt-8">Waiting for events...</div>
         )}
         {events.map(e => (
-          <div key={e.id} className="flex gap-3 items-start">
-            <span className="text-zinc-600 shrink-0">
-              {e.ts.toLocaleTimeString()}
-            </span>
+          <div key={e.id} className="flex gap-3 items-baseline">
+            <span className="text-zinc-600 shrink-0 tabular-nums">{e.ts.toLocaleTimeString()}</span>
             <span className="shrink-0">{EVENT_ICON[e.event] ?? '•'}</span>
-            <span className="text-zinc-300">
-              <span className="text-zinc-500">[{e.event}]</span>{' '}
-              {e.event === 'finding'
-                ? <span className={e.data.severity === 'critical' ? 'text-red-400' : e.data.severity === 'high' ? 'text-orange-400' : 'text-zinc-300'}>
-                    [{e.data.severity?.toUpperCase()}] {e.data.title}
-                  </span>
-                : e.event === 'host_found'
-                ? <span className="text-blue-400">{e.data.hostname ?? e.data.ip}</span>
-                : JSON.stringify(e.data)
-              }
+            <span>
+              <span className="text-zinc-600">[{e.event}] </span>
+              {formatEvent(e)}
             </span>
           </div>
         ))}

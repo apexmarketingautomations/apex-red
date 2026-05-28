@@ -1,12 +1,12 @@
 import { Routes, Route } from 'react-router-dom';
 import Dashboard from './pages/Dashboard';
-import ScanDetail from './pages/ScanDetail';
+import InvestigationDetail from './pages/InvestigationDetail';
 
 export default function App() {
   return (
     <Routes>
       <Route path="/" element={<Dashboard />} />
-      <Route path="/scans/:id" element={<ScanDetail />} />
+      <Route path="/investigations/:id" element={<InvestigationDetail />} />
     </Routes>
   );
 }

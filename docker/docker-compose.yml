@@ -59,6 +59,60 @@ services:
     networks:
       - apex-red-net
 
+  # ── OSINT Tools ─────────────────────────────────────────────────
+
+  apex-red-osint:
+    image: python:3.11-slim
+    container_name: apex-red-osint
+    command: >
+      bash -c "pip install -q holehe sherlock-project theHarvester phoneinfoga 2>/dev/null;
+               tail -f /dev/null"
+    entrypoint: []
+    networks:
+      - apex-red-net
+
+  # ── Code Intelligence Tools ──────────────────────────────────────
+
+  apex-red-code:
+    image: alpine:3.19
+    container_name: apex-red-code
+    command: ["tail", "-f", "/dev/null"]
+    entrypoint: []
+    networks:
+      - apex-red-net
+
+  trufflehog:
+    image: trufflesecurity/trufflehog:latest
+    container_name: apex-red-trufflehog
+    entrypoint: ["tail", "-f", "/dev/null"]
+    networks:
+      - apex-red-net
+
+  semgrep:
+    image: semgrep/semgrep:latest
+    container_name: apex-red-semgrep
+    entrypoint: ["tail", "-f", "/dev/null"]
+    networks:
+      - apex-red-net
+
+  trivy:
+    image: aquasec/trivy:latest
+    container_name: apex-red-trivy
+    entrypoint: ["tail", "-f", "/dev/null"]
+    volumes:
+      - /tmp/trivy-cache:/root/.cache/trivy
+    networks:
+      - apex-red-net
+
+  # ── Cloud Tools ─────────────────────────────────────────────────
+
+  s3scanner:
+    image: sa7mon/s3scanner:latest
+    container_name: apex-red-s3scanner
+    entrypoint: ["tail", "-f", "/dev/null"]
+    networks:
+      - apex-red-net
+
   # ── Scanner ──────────────────────────────────────────────────────
 
   nuclei:
