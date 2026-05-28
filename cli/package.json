@@ -1,0 +1,15 @@
+{
+  "name": "@apex-red/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "apex-red": "src/index.ts" },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

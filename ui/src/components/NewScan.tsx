@@ -24,7 +24,7 @@ export default function NewScan({ onClose, onCreated }: {
   const submit = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/scans`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/scans`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

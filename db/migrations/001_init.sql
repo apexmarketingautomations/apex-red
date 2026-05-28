@@ -70,6 +70,10 @@ CREATE TABLE IF NOT EXISTS findings (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Unique constraints for ON CONFLICT
+ALTER TABLE phases ADD CONSTRAINT phases_scan_phase_unique UNIQUE (scan_id, phase);
+ALTER TABLE hosts  ADD CONSTRAINT hosts_scan_ip_unique     UNIQUE (scan_id, ip);
+
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_targets_scan ON targets(scan_id);
 CREATE INDEX IF NOT EXISTS idx_findings_scan ON findings(scan_id);

@@ -7,10 +7,10 @@ export default function Dashboard() {
   const [showNew, setShowNew] = useState(false);
 
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api/scans`)
-      .then(r => r.json())
+    fetch(`${import.meta.env.VITE_API_URL ?? ''}/api/scans`)
+      .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
       .then(setScans)
-      .catch(console.error);
+      .catch(() => setScans([]));
   }, []);
 
   const stats = {

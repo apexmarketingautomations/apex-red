@@ -1,0 +1,7 @@
+packages:
+  - 'orchestrator'
+  - 'api'
+  - 'ui'
+  - 'shared'
+  - 'cli'
+  - 'agents/*'
