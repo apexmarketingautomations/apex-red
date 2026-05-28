@@ -1,0 +1,139 @@
+networks:
+  apex-red-net:
+    name: apex-red-net
+
+volumes:
+  temporal-data:
+  postgres-data:
+  findings-data:
+
+services:
+  # ── Core Infrastructure ──────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: apex-red-postgres
+    environment:
+      POSTGRES_DB: apexred
+      POSTGRES_USER: apexred
+      POSTGRES_PASSWORD: apexred
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ../db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U apexred"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - apex-red-net
+
+  temporal:
+    image: temporalio/temporal:latest
+    container_name: apex-red-temporal
+    command: ["server", "start-dev", "--db-filename", "/home/temporal/temporal.db", "--ip", "0.0.0.0"]
+    ports:
+      - "127.0.0.1:7233:7233"
+      - "127.0.0.1:8233:8233"
+    volumes:
+      - temporal-data:/home/temporal
+    healthcheck:
+      test: ["CMD", "temporal", "operator", "cluster", "health", "--address", "localhost:7233"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - apex-red-net
+
+  # ── Recon Tools ──────────────────────────────────────────────────
+
+  reconftw:
+    image: six2dez/reconftw:main
+    container_name: apex-red-reconftw
+    volumes:
+      - findings-data:/reconftw/Recon
+    entrypoint: ["tail", "-f", "/dev/null"] # keep alive, exec commands in
+    networks:
+      - apex-red-net
+
+  # ── Scanner ──────────────────────────────────────────────────────
+
+  nuclei:
+    image: projectdiscovery/nuclei:latest
+    container_name: apex-red-nuclei
+    entrypoint: ["tail", "-f", "/dev/null"]
+    networks:
+      - apex-red-net
+
+  # ── Shannon (AI Pentester) ────────────────────────────────────────
+
+  shannon:
+    image: keygraph/shannon:1.4.0
+    container_name: apex-red-shannon
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - TEMPORAL_ADDRESS=temporal:7233
+    depends_on:
+      temporal:
+        condition: service_healthy
+    networks:
+      - apex-red-net
+
+  # ── WiFi (requires host network + wireless interface) ────────────
+
+  bettercap:
+    image: bettercap/bettercap:latest
+    container_name: apex-red-bettercap
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    profiles:
+      - wifi # only starts when explicitly enabled
+
+  # ── API Server ───────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile.dev
+    container_name: apex-red-api
+    environment:
+      - DATABASE_URL=postgresql://apexred:apexred@postgres:5432/apexred
+      - TEMPORAL_ADDRESS=temporal:7233
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - PORT=4000
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ../api:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    networks:
+      - apex-red-net
+
+  # ── UI ───────────────────────────────────────────────────────────
+
+  ui:
+    build:
+      context: ../ui
+      dockerfile: Dockerfile.dev
+    container_name: apex-red-ui
+    environment:
+      - VITE_API_URL=http://localhost:4000
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - ../ui:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - apex-red-net

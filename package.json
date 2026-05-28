@@ -1,0 +1,26 @@
+{
+  "name": "apex-red",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Apex Red — Autonomous full-spectrum red team platform",
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "turbo": "^2.5.0",
+    "typescript": "^5.5.0"
+  },
+  "workspaces": [
+    "orchestrator",
+    "api",
+    "ui",
+    "shared",
+    "agents/*"
+  ]
+}
