@@ -55,29 +55,30 @@ fi
 # ── 1. ARP SCAN ───────────────────────────────────────────────────
 echo -e "\n${YELLOW}[1/6] ARP SCAN — mapping $SUBNET...${NC}"
 FOUND_IPS=()
-if command -v nmap &>/dev/null; then
-  while IFS= read -r line; do
-    IP=$(echo "$line" | awk '{print $2}')
-    MAC=$(arp -n "$IP" 2>/dev/null | awk '/([0-9a-f]{2}:){5}/ {print $3}' | head -1)
-    [[ -z "$IP" ]] && continue
-    FOUND_IPS+=("$IP")
-    if [[ "${MAC,,}" == "${TARGET_MAC,,}" ]]; then
-      echo -e "  ${RED}[!!] TARGET MAC FOUND: $IP -> $MAC${NC}"
-    else
-      echo -e "  ${GREEN}$IP${NC}  $MAC"
-    fi
-  done < <(nmap -sn "$SUBNET" -oG - 2>/dev/null | grep "Host:")
-else
-  echo "[*] nmap missing, doing ping sweep..."
-  for i in $(seq 1 254); do
-    ping -c 1 -W 1 "192.168.0.$i" &>/dev/null && FOUND_IPS+=("192.168.0.$i") &
-  done
-  wait
-  arp -n 2>/dev/null | grep -v incomplete | tail -n +2 | while read -r IP _ MAC _; do
-    echo -e "  ${GREEN}$IP${NC}  $MAC"
-    [[ "${MAC,,}" == "${TARGET_MAC,,}" ]] && echo -e "  ${RED}[!!] TARGET MAC: $IP${NC}"
-  done
-fi
+
+# Ping sweep first to populate ARP table (works without root)
+echo "[*] Ping sweeping $SUBNET..."
+for i in $(seq 1 254); do
+  ping -c 1 -W 1 "192.168.0.$i" &>/dev/null &
+done
+wait
+echo "[*] Reading ARP table..."
+
+# Use ip neigh (works on Android without root)
+ip neigh show 2>/dev/null | while read -r IP _ _ _ MAC STATE; do
+  [[ "$STATE" == "FAILED" || -z "$IP" || -z "$MAC" ]] && continue
+  FOUND_IPS+=("$IP")
+  if [[ "${MAC,,}" == "${TARGET_MAC,,}" ]]; then
+    echo -e "  ${RED}[!!] TARGET MAC FOUND: $IP -> $MAC  STATE:$STATE${NC}"
+  else
+    echo -e "  ${GREEN}$IP${NC}  $MAC  $STATE"
+  fi
+done
+
+# Also dump full ip neigh for visibility
+echo ""
+echo "[*] Full neighbor table:"
+ip neigh show 2>/dev/null | grep -v FAILED
 
 # ── 2. PORT SCAN TARGET ───────────────────────────────────────────
 echo -e "\n${YELLOW}[2/6] PORT SCAN — $TARGET_IP...${NC}"
@@ -93,16 +94,28 @@ fi
 
 # ── 3. CLONE DETECTION ────────────────────────────────────────────
 echo -e "\n${YELLOW}[3/6] CLONE DETECTION...${NC}"
-CLONE_IPS=$(arp -n 2>/dev/null | grep -i "$TARGET_MAC" | awk '{print $1}')
-COUNT=$(echo "$CLONE_IPS" | grep -c '\.' 2>/dev/null || echo 0)
+# Check ip neigh for target MAC
+CLONE_IPS=$(ip neigh show 2>/dev/null | grep -i "$TARGET_MAC" | awk '{print $1}')
+COUNT=0
+while IFS= read -r ip; do [[ -n "$ip" ]] && ((COUNT++)); done <<< "$CLONE_IPS"
+
 if [[ "$COUNT" -gt 1 ]]; then
-  echo -e "  ${RED}[!!] CLONE CONFIRMED — MAC $TARGET_MAC appears on:${NC}"
-  echo "$CLONE_IPS" | while read -r ip; do echo -e "  ${RED}  -> $ip${NC}"; done
+  echo -e "  ${RED}[!!] CLONE CONFIRMED — MAC $TARGET_MAC on multiple IPs:${NC}"
+  echo "$CLONE_IPS" | while read -r ip; do [[ -n "$ip" ]] && echo -e "  ${RED}  -> $ip${NC}"; done
 elif [[ "$COUNT" -eq 1 ]]; then
-  echo -e "  ${GREEN}[OK] MAC $TARGET_MAC found once at: $CLONE_IPS${NC}"
+  echo -e "  ${GREEN}[OK] MAC $TARGET_MAC seen once at: $CLONE_IPS${NC}"
 else
-  echo -e "  [?] MAC $TARGET_MAC not in ARP table — device may be offline or MAC-randomizing"
+  echo -e "  [?] MAC $TARGET_MAC not seen — device offline, or using MAC randomization"
 fi
+
+# Check for ANY duplicate MACs across the whole table (catches clones of other devices too)
+echo ""
+echo "[*] Checking ALL MACs for duplicates..."
+ip neigh show 2>/dev/null | grep -v FAILED | awk '{print $5}' | sort | uniq -d | while read -r dup; do
+  [[ -z "$dup" || "$dup" == "lladdr" ]] && continue
+  IPS=$(ip neigh show 2>/dev/null | grep -i "$dup" | awk '{print $1}' | tr '\n' ' ')
+  echo -e "  ${RED}[!!] DUPLICATE MAC: $dup seen on IPs: $IPS${NC}"
+done
 
 # ── 4. GEO TRACE — traceroute + geolocate every hop ─────────────
 echo -e "\n${YELLOW}[4/6] GEO TRACE to $TARGET_IP (then external)...${NC}"
@@ -220,3 +233,4 @@ echo "  Gateway   : $GATEWAY locked"
 echo "  Interface : $IFACE"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Run again: bash phone-sweep.sh"
+# This file was already rewritten — see Write below
